@@ -8,6 +8,7 @@ repository = "https://github.com/kardeiz/hash-ids"
 readme = "README.md"
 keywords = ["hashids", "id", "generator"]
 license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/hash-ids"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
