@@ -1,3 +1,21 @@
+/*!
+# hash-ids
+
+A fast, dependency-free implementation for [hashids](https://hashids.org/).
+
+## Usage
+
+```rust
+fn main() {
+    let hash_ids = hash_ids::HashIds::builder()
+        .with_salt("Arbitrary string")
+        .finish();
+    assert_eq!("neHrCa", hash_ids.encode(&[1, 2, 3]));
+    assert_eq!(vec![1, 2, 3], hash_ids.decode("neHrCa"));
+}
+```
+*/
+
 use std::collections::VecDeque;
 
 const MIN_ALPHABET_LENGTH: usize = 16;
@@ -6,6 +24,7 @@ const GUARD_DIV: f32 = 12.0;
 const DEFAULT_SEPARATORS: &str = "cfhistuCFHISTU";
 const DEFAULT_ALPHABET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 
+/// Error container, for custom alphabets that won't work
 #[derive(Debug)]
 pub enum Error {
     AlphabetTooSmall,
@@ -23,29 +42,42 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Default)]
+/// Builder for a `HashIds`
+#[derive(Debug)]
 pub struct HashIdsBuilder {
     salt: Vec<char>,
     min_length: usize,
 }
 
-#[derive(Debug, Default)]
+impl HashIdsBuilder {
+    fn new() -> Self {
+        Self { salt: vec![], min_length: 0 }
+    }
+}
+
+/// Same as `HashIdsBuilder`, but with custom alphabet (which can fail)
+#[derive(Debug)]
 pub struct HashIdsBuilderWithCustomAlphabet {
     inner: HashIdsBuilder,
     alphabet: Vec<char>,
 }
 
 impl HashIdsBuilderWithCustomAlphabet {
+    /// Set the salt (arbitrary string) for the `HashIds`
     pub fn with_salt(mut self, salt: &str) -> Self {
         self.inner = self.inner.with_salt(salt);
         self
     }
 
+    /// Set the minimum length for the encoded string
     pub fn with_min_length(mut self, min_length: usize) -> Self {
         self.inner = self.inner.with_min_length(min_length);
         self
     }
 
+    /// Convert the builder to the finished `HashIds`
+    ///
+    /// Can fail if the custom alphabet won't work
     pub fn finish(self) -> std::result::Result<HashIds, Error> {
         let Self { inner: HashIdsBuilder { salt, min_length }, mut alphabet } = self;
 
@@ -54,7 +86,10 @@ impl HashIdsBuilderWithCustomAlphabet {
 
         alphabet = alphabet.drain(..).filter(|x| !separators.contains(x)).collect();
 
-        alphabet = alphabet.clone().into_iter().enumerate()
+        alphabet = alphabet
+            .clone()
+            .into_iter()
+            .enumerate()
             .filter(|(i, c)| alphabet.iter().position(|a| a == c) == Some(*i))
             .map(|(_, c)| c)
             .collect();
@@ -72,20 +107,24 @@ impl HashIdsBuilderWithCustomAlphabet {
 }
 
 impl HashIdsBuilder {
+    /// Set the salt (arbitrary string) for the `HashIds`
     pub fn with_salt(mut self, salt: &str) -> Self {
         self.salt = salt.chars().collect();
         self
     }
 
+    /// Set the minimum length for the encoded string
     pub fn with_min_length(mut self, min_length: usize) -> Self {
         self.min_length = min_length;
         self
     }
 
+    /// Set the custom alphabet to use for encoding
     pub fn with_alphabet(self, alphabet: &str) -> HashIdsBuilderWithCustomAlphabet {
         HashIdsBuilderWithCustomAlphabet { inner: self, alphabet: alphabet.chars().collect() }
     }
 
+    /// Convert the builder to the finished `HashIds`
     pub fn finish(self) -> HashIds {
         let Self { salt, min_length } = self;
         HashIds {
@@ -102,6 +141,7 @@ impl HashIdsBuilder {
     }
 }
 
+/// The encoder/decoder container
 #[derive(Debug, Clone)]
 pub struct HashIds {
     salt: Vec<char>,
@@ -112,6 +152,11 @@ pub struct HashIds {
 }
 
 impl HashIds {
+    /// Create a new `HashIdsBuilder`
+    pub fn builder() -> HashIdsBuilder {
+        HashIdsBuilder::new()
+    }
+
     fn finish(self) -> Self {
         let Self { salt, min_length, mut alphabet, mut separators, .. } = self;
 
@@ -208,9 +253,11 @@ impl HashIds {
         parts
     }
 
+    /// Encode a slice of numbers into a string
     pub fn encode(&self, vals: &[u64]) -> String {
-
-        if vals.is_empty() { return String::new(); }
+        if vals.is_empty() {
+            return String::new();
+        }
 
         let mut alphabet = self.alphabet.clone();
 
@@ -273,11 +320,14 @@ impl HashIds {
             encoded.into_iter().collect::<String>()
         }
     }
-   
 
+    /// Decode a string into a `Vec` of numbers
+    ///
+    /// May panic if `hash_str` was not created with the current configuration
     pub fn decode(&self, hash_str: &str) -> Vec<u64> {
-
-        if hash_str.is_empty() { return vec![]; }
+        if hash_str.is_empty() {
+            return vec![];
+        }
 
         let mut alphabet = self.alphabet.clone();
 
@@ -312,51 +362,33 @@ mod tests {
 
     use super::*;
 
-            // let hash_ids = HashIdsBuilder::default()
-        //     .with_salt("aaaaaaaaaaaaaaaaa")
-        //     // .with_min_length(10000)
-        //     // .with_alphabet("😁⛅🎈🌲🏡🏃😂😍🎉👍😍abcdefghijklmnopqrstuvwxyz")
-        //     .finish();
-        //     // .finish().unwrap();
-
-        // dbg!(&hash_ids);
-
-        // let val = hash_ids.encode(&[23, 42, 45]);
-
-        // dbg!(&val);
-
-        // let val = hash_ids.decode(&val);
-
-        // dbg!(&val);
-
     #[test]
     fn test_small_alphabet_with_no_repeating_characters() {
-        assert!(HashIdsBuilder::default().with_alphabet("abcdefghijklmno").finish().is_err());
+        assert!(HashIds::builder().with_alphabet("abcdefghijklmno").finish().is_err());
     }
 
     #[test]
     fn test_small_alphabet_with_repeating_characters() {
-        assert!(HashIdsBuilder::default().with_alphabet("abcdecfghijklbmnoa").finish().is_err());
+        assert!(HashIds::builder().with_alphabet("abcdecfghijklbmnoa").finish().is_err());
     }
 
     #[test]
     fn test_empty() {
-        let hash_ids = HashIdsBuilder::default().finish();
+        let hash_ids = HashIds::builder().finish();
         assert_eq!("", hash_ids.encode(&[]));
         assert_eq!(Vec::<u64>::new(), hash_ids.decode(""))
     }
 
     #[test]
     fn test_default_salt() {
-        let hash_ids = HashIdsBuilder::default().finish();
+        let hash_ids = HashIds::builder().finish();
         assert_eq!("o2fXhV", hash_ids.encode(&[1, 2, 3]));
         assert_eq!(vec![1, 2, 3], hash_ids.decode("o2fXhV"));
     }
 
-
     #[test]
     fn test_single_number() {
-        let hash_ids = HashIdsBuilder::default().finish();
+        let hash_ids = HashIds::builder().finish();
 
         assert_eq!("j0gW", hash_ids.encode(&[12345]));
         assert_eq!("jR", hash_ids.encode(&[1]));
@@ -373,7 +405,7 @@ mod tests {
 
     #[test]
     fn test_multiple_numbers() {
-        let hash_ids = HashIdsBuilder::default().finish();
+        let hash_ids = HashIds::builder().finish();
 
         assert_eq!("vJvi7On9cXGtD", hash_ids.encode(&[683, 94108, 123, 5]));
         assert_eq!("o2fXhV", hash_ids.encode(&[1, 2, 3]));
@@ -388,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_salt() {
-        let hash_ids = HashIdsBuilder::default().with_salt("Arbitrary string").finish();
+        let hash_ids = HashIds::builder().with_salt("Arbitrary string").finish();
 
         assert_eq!("QWyf8yboH7KT2", hash_ids.encode(&[683, 94108, 123, 5]));
         assert_eq!("neHrCa", hash_ids.encode(&[1, 2, 3]));
@@ -403,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_alphabet() {
-        let hash_ids = HashIdsBuilder::default().with_alphabet(r##"!"#%&',-/0123456789:;<=>ABCDEFGHIJKLMNOPQRSTUVWXYZ_`abcdefghijklmnopqrstuvwxyz~"##).finish().unwrap();
+        let hash_ids = HashIds::builder().with_alphabet(r##"!"#%&',-/0123456789:;<=>ABCDEFGHIJKLMNOPQRSTUVWXYZ_`abcdefghijklmnopqrstuvwxyz~"##).finish().unwrap();
 
         assert_eq!("_nJUNTVU3", hash_ids.encode(&[2839, 12, 32, 5]));
         assert_eq!("7xfYh2", hash_ids.encode(&[1, 2, 3]));
@@ -418,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_min_length() {
-        let hash_ids = HashIdsBuilder::default().with_min_length(25).finish();
+        let hash_ids = HashIds::builder().with_min_length(25).finish();
 
         assert_eq!("pO3K69b86jzc6krI416enr2B5", hash_ids.encode(&[7452, 2967, 21401]));
         assert_eq!("gyOwl4B97bo2fXhVaDR0Znjrq", hash_ids.encode(&[1, 2, 3]));
@@ -433,7 +465,12 @@ mod tests {
 
     #[test]
     fn test_all_parameters() {
-        let hash_ids = HashIdsBuilder::default().with_salt("arbitrary salt").with_alphabet("abcdefghijklmnopqrstuvwxyz").with_min_length(16).finish().unwrap();
+        let hash_ids = HashIds::builder()
+            .with_salt("arbitrary salt")
+            .with_alphabet("abcdefghijklmnopqrstuvwxyz")
+            .with_min_length(16)
+            .finish()
+            .unwrap();
 
         assert_eq!("wygqxeunkatjgkrw", hash_ids.encode(&[7452, 2967, 21401]));
         assert_eq!("pnovxlaxuriowydb", hash_ids.encode(&[1, 2, 3]));
@@ -448,7 +485,10 @@ mod tests {
 
     #[test]
     fn test_alphabet_without_standard_separators() {
-        let hash_ids = HashIdsBuilder::default().with_alphabet("abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890").finish().unwrap();
+        let hash_ids = HashIds::builder()
+            .with_alphabet("abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890")
+            .finish()
+            .unwrap();
 
         assert_eq!("X50Yg6VPoAO4", hash_ids.encode(&[7452, 2967, 21401]));
         assert_eq!("GAbDdR", hash_ids.encode(&[1, 2, 3]));
@@ -463,7 +503,10 @@ mod tests {
 
     #[test]
     fn test_alphabet_with_two_standard_separators() {
-        let hash_ids = HashIdsBuilder::default().with_alphabet("abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890uC").finish().unwrap();
+        let hash_ids = HashIds::builder()
+            .with_alphabet("abdegjklmnopqrvwxyzABDEGJKLMNOPQRVWXYZ1234567890uC")
+            .finish()
+            .unwrap();
 
         assert_eq!("GJNNmKYzbPBw", hash_ids.encode(&[7452, 2967, 21401]));
         assert_eq!("DQCXa4", hash_ids.encode(&[1, 2, 3]));
@@ -476,6 +519,13 @@ mod tests {
         assert_eq!(vec![99, 25], hash_ids.decode("373az"));
     }
 
+    #[test]
+    fn test_long() {
+        let hash_ids = HashIds::builder().with_salt("arbitrary salt").finish();
 
+        let up_to_100 = (1..=100).into_iter().collect::<Vec<_>>();
 
+        assert_eq!("GaHMFdtBf0ceClsgiVIjSrUKh1TyupHXFwt5fQcXCwspilIvSYUQhoT2u0HMF5tVfVc9CEsYiqI6SDUdhyTauBHPaF66t8pfGXcnoC2Vs0ei1YIy8SZ2UPehlyTKZuYJHQyF6wtZafR7c52Cn6skLigpIbGSD7UVkhyZT9xukeHBnFR1tJ2f2ocnVCkVsEQia6IBbSDEUX3hB6TaBuDbHxkFd7tykfrjc55Crjs2GigrIx5SpKUKjhVRTdQuX7H9K", hash_ids.encode(&up_to_100));
+        assert_eq!(up_to_100, hash_ids.decode("GaHMFdtBf0ceClsgiVIjSrUKh1TyupHXFwt5fQcXCwspilIvSYUQhoT2u0HMF5tVfVc9CEsYiqI6SDUdhyTauBHPaF66t8pfGXcnoC2Vs0ei1YIy8SZ2UPehlyTKZuYJHQyF6wtZafR7c52Cn6skLigpIbGSD7UVkhyZT9xukeHBnFR1tJ2f2ocnVCkVsEQia6IBbSDEUX3hB6TaBuDbHxkFd7tykfrjc55Crjs2GigrIx5SpKUKjhVRTdQuX7H9K"));
+    }
 }

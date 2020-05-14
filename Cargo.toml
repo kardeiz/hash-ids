@@ -1,9 +1,9 @@
 [package]
 name = "hash-ids"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Jacob Brown <kardeiz@gmail.com>"]
 edition = "2018"
-description = "a fash hashids implementation"
+description = "a fast hashids (hashids.org) implementation"
 repository = "https://github.com/kardeiz/hash-ids"
 readme = "README.md"
 keywords = ["hashids", "id", "generator"]
